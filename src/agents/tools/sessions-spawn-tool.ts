@@ -9,15 +9,9 @@ import {
   normalizeAgentId,
   parseAgentSessionKey,
 } from "../../routing/session-key.js";
-import {
-  buildSubagentSystemPrompt,
-  runSubagentAnnounceFlow,
-} from "../subagent-announce.js";
-import {
-  beginSubagentAnnounce,
-  registerSubagentRun,
-} from "../subagent-registry.js";
-import { readLatestAssistantReply } from "./agent-step.js";
+import { resolveAgentConfig } from "../agent-scope.js";
+import { buildSubagentSystemPrompt } from "../subagent-announce.js";
+import { registerSubagentRun } from "../subagent-registry.js";
 import type { AnyAgentTool } from "./common.js";
 import { jsonResult, readStringParam } from "./common.js";
 import {
@@ -29,7 +23,10 @@ import {
 const SessionsSpawnToolSchema = Type.Object({
   task: Type.String(),
   label: Type.Optional(Type.String()),
+  agentId: Type.Optional(Type.String()),
   model: Type.Optional(Type.String()),
+  runTimeoutSeconds: Type.Optional(Type.Integer({ minimum: 0 })),
+  // Back-compat alias. Prefer runTimeoutSeconds.
   timeoutSeconds: Type.Optional(Type.Integer({ minimum: 0 })),
   cleanup: Type.Optional(
     Type.Union([Type.Literal("delete"), Type.Literal("keep")]),
@@ -51,19 +48,26 @@ export function createSessionsSpawnTool(opts?: {
       const params = args as Record<string, unknown>;
       const task = readStringParam(params, "task", { required: true });
       const label = typeof params.label === "string" ? params.label.trim() : "";
+      const requestedAgentId = readStringParam(params, "agentId");
       const requestedModel = readStringParam(params, "model");
-      const timeoutSeconds =
-        typeof params.timeoutSeconds === "number" &&
-        Number.isFinite(params.timeoutSeconds)
-          ? Math.max(0, Math.floor(params.timeoutSeconds))
-          : 0;
       const cleanup =
         params.cleanup === "keep" || params.cleanup === "delete"
           ? (params.cleanup as "keep" | "delete")
-          : timeoutSeconds === 0
-            ? "keep"
-            : "delete";
-      const timeoutMs = timeoutSeconds * 1000;
+          : "keep";
+      const runTimeoutSeconds = (() => {
+        const explicit =
+          typeof params.runTimeoutSeconds === "number" &&
+          Number.isFinite(params.runTimeoutSeconds)
+            ? Math.max(0, Math.floor(params.runTimeoutSeconds))
+            : undefined;
+        if (explicit !== undefined) return explicit;
+        const legacy =
+          typeof params.timeoutSeconds === "number" &&
+          Number.isFinite(params.timeoutSeconds)
+            ? Math.max(0, Math.floor(params.timeoutSeconds))
+            : undefined;
+        return legacy ?? 0;
+      })();
       let modelWarning: string | undefined;
       let modelApplied = false;
 
@@ -100,7 +104,33 @@ export function createSessionsSpawnTool(opts?: {
       const requesterAgentId = normalizeAgentId(
         parseAgentSessionKey(requesterInternalKey)?.agentId,
       );
-      const childSessionKey = `agent:${requesterAgentId}:subagent:${crypto.randomUUID()}`;
+      const targetAgentId = requestedAgentId
+        ? normalizeAgentId(requestedAgentId)
+        : requesterAgentId;
+      if (targetAgentId !== requesterAgentId) {
+        const allowAgents =
+          resolveAgentConfig(cfg, requesterAgentId)?.subagents?.allowAgents ??
+          [];
+        const allowAny = allowAgents.some((value) => value.trim() === "*");
+        const normalizedTargetId = targetAgentId.toLowerCase();
+        const allowSet = new Set(
+          allowAgents
+            .filter((value) => value.trim() && value.trim() !== "*")
+            .map((value) => normalizeAgentId(value).toLowerCase()),
+        );
+        if (!allowAny && !allowSet.has(normalizedTargetId)) {
+          const allowedText = allowAny
+            ? "*"
+            : allowSet.size > 0
+              ? Array.from(allowSet).join(", ")
+              : "none";
+          return jsonResult({
+            status: "forbidden",
+            error: `agentId is not allowed for sessions_spawn (allowed: ${allowedText})`,
+          });
+        }
+      }
+      const childSessionKey = `agent:${targetAgentId}:subagent:${crypto.randomUUID()}`;
       if (opts?.sandboxed === true) {
         try {
           await callGateway({
@@ -159,6 +189,7 @@ export function createSessionsSpawnTool(opts?: {
             deliver: false,
             lane: "subagent",
             extraSystemPrompt: childSystemPrompt,
+            timeout: runTimeoutSeconds > 0 ? runTimeoutSeconds : undefined,
           },
           timeoutMs: 10_000,
         })) as { runId?: string };
@@ -190,109 +221,10 @@ export function createSessionsSpawnTool(opts?: {
         cleanup,
       });
 
-      if (timeoutSeconds === 0) {
-        return jsonResult({
-          status: "accepted",
-          childSessionKey,
-          runId: childRunId,
-          modelApplied: model ? modelApplied : undefined,
-          warning: modelWarning,
-        });
-      }
-
-      let waitStatus: string | undefined;
-      let waitError: string | undefined;
-      let waitStartedAt: number | undefined;
-      let waitEndedAt: number | undefined;
-      try {
-        const wait = (await callGateway({
-          method: "agent.wait",
-          params: {
-            runId: childRunId,
-            timeoutMs,
-          },
-          timeoutMs: timeoutMs + 2000,
-        })) as {
-          status?: string;
-          error?: string;
-          startedAt?: number;
-          endedAt?: number;
-        };
-        waitStatus = typeof wait?.status === "string" ? wait.status : undefined;
-        waitError = typeof wait?.error === "string" ? wait.error : undefined;
-        waitStartedAt =
-          typeof wait?.startedAt === "number" ? wait.startedAt : undefined;
-        waitEndedAt =
-          typeof wait?.endedAt === "number" ? wait.endedAt : undefined;
-      } catch (err) {
-        const messageText =
-          err instanceof Error
-            ? err.message
-            : typeof err === "string"
-              ? err
-              : "error";
-        return jsonResult({
-          status: messageText.includes("gateway timeout") ? "timeout" : "error",
-          error: messageText,
-          childSessionKey,
-          runId: childRunId,
-        });
-      }
-
-      if (waitStatus === "timeout") {
-        try {
-          await callGateway({
-            method: "chat.abort",
-            params: { sessionKey: childSessionKey, runId: childRunId },
-            timeoutMs: 5_000,
-          });
-        } catch {
-          // best-effort
-        }
-        return jsonResult({
-          status: "timeout",
-          error: waitError,
-          childSessionKey,
-          runId: childRunId,
-          modelApplied: model ? modelApplied : undefined,
-          warning: modelWarning,
-        });
-      }
-      if (waitStatus === "error") {
-        return jsonResult({
-          status: "error",
-          error: waitError ?? "agent error",
-          childSessionKey,
-          runId: childRunId,
-          modelApplied: model ? modelApplied : undefined,
-          warning: modelWarning,
-        });
-      }
-
-      const replyText = await readLatestAssistantReply({
-        sessionKey: childSessionKey,
-      });
-      if (beginSubagentAnnounce(childRunId)) {
-        void runSubagentAnnounceFlow({
-          childSessionKey,
-          childRunId,
-          requesterSessionKey: requesterInternalKey,
-          requesterProvider: opts?.agentProvider,
-          requesterDisplayKey,
-          task,
-          timeoutMs: 30_000,
-          cleanup,
-          roundOneReply: replyText,
-          startedAt: waitStartedAt,
-          endedAt: waitEndedAt,
-        });
-      }
-
       return jsonResult({
-        status: "ok",
+        status: "accepted",
         childSessionKey,
         runId: childRunId,
-        reply: replyText,
         modelApplied: model ? modelApplied : undefined,
         warning: modelWarning,
       });
