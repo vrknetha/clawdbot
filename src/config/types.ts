@@ -1114,6 +1114,10 @@ export type CommandsConfig = {
   debug?: boolean;
   /** Allow restart commands/tools (default: false). */
   restart?: boolean;
+  /** Allow /bash command (default: false). */
+  bash?: boolean;
+  /** Foreground window before /bash backgrounds (ms). Default: 2000. */
+  bashForegroundMs?: number;
   /** Enforce access-group allowlists/policies for commands (default: true). */
   useAccessGroups?: boolean;
 };

@@ -211,6 +211,10 @@ const FIELD_HELP: Record<string, string> = {
     "Allow /debug chat command for runtime-only overrides (default: false).",
   "commands.restart":
     "Allow /restart and gateway restart tool actions (default: false).",
+  "commands.bash":
+    "Allow /bash chat command to run host shell commands (default: false; requires tools.elevated).",
+  "commands.bashForegroundMs":
+    "How long /bash waits before backgrounding (ms). 0 backgrounds immediately (default: 2000).",
   "commands.useAccessGroups":
     "Enforce access-group allowlists/policies for commands.",
   "session.agentToAgent.maxPingPongTurns":

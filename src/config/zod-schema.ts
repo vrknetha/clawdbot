@@ -695,6 +695,8 @@ const CommandsSchema = z
     config: z.boolean().optional(),
     debug: z.boolean().optional(),
     restart: z.boolean().optional(),
+    bash: z.boolean().optional(),
+    bashForegroundMs: z.number().int().min(0).max(30_000).optional(),
     useAccessGroups: z.boolean().optional(),
   })
   .optional();
