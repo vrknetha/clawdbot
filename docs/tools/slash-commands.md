@@ -21,6 +21,8 @@ Directives (`/think`, `/verbose`, `/reasoning`, `/elevated`) are parsed even whe
     config: false,
     debug: false,
     restart: false,
+    bash: false,
+    bashForegroundMs: 2000,
     useAccessGroups: true
   }
 }
@@ -33,6 +35,8 @@ Directives (`/think`, `/verbose`, `/reasoning`, `/elevated`) are parsed even whe
   - Slack commands are managed in the Slack app and are not removed automatically.
 - `commands.config` (default `false`) enables `/config` (reads/writes `clawdbot.json`).
 - `commands.debug` (default `false`) enables `/debug` (runtime-only overrides).
+- `commands.bash` (default `false`) enables `/bash` (run host shell commands; requires `tools.elevated` allowlists).
+- `commands.bashForegroundMs` (default `2000`) controls how long `/bash` waits before switching to background mode (`0` backgrounds immediately).
 - `commands.useAccessGroups` (default `true`) enforces allowlists/policies for commands.
 
 ## Command list
@@ -50,6 +54,9 @@ Text + native (when enabled):
 - `/cost on|off` (toggle per-response usage line)
 - `/stop`
 - `/restart`
+- `/bash <command>` (host-only; one at a time; use `/bash poll` + `/bash stop` for long-running jobs)
+- `/bash poll [sessionId]` (check output / status)
+- `/bash stop [sessionId]` (stop the running /bash job)
 - `/activation mention|always` (groups only)
 - `/send on|off|inherit` (owner-only)
 - `/reset` or `/new`

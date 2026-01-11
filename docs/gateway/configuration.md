@@ -617,6 +617,8 @@ Controls how chat commands are enabled across connectors.
     config: false,          // allow /config (writes to disk)
     debug: false,           // allow /debug (runtime-only overrides)
     restart: false,         // allow /restart + gateway restart tool
+    bash: false,            // allow /bash (host-only; requires tools.elevated allowlists)
+    bashForegroundMs: 2000, // /bash foreground window (0 backgrounds immediately)
     useAccessGroups: true   // enforce access-group allowlists/policies for commands
   }
 }
@@ -630,6 +632,8 @@ Notes:
 - `commands.config: true` enables `/config` (reads/writes `clawdbot.json`).
 - `commands.debug: true` enables `/debug` (runtime-only overrides).
 - `commands.restart: true` enables `/restart` and the gateway tool restart action.
+- `commands.bash: true` enables `/bash` (runs host shell commands). Requires `tools.elevated.enabled` and allowlisting the sender in `tools.elevated.allowFrom.<provider>`.
+- `commands.bashForegroundMs` controls how long `/bash` waits before backgrounding. While a `/bash` job is running, new `/bash <cmd>` requests are rejected (one at a time).
 - `commands.useAccessGroups: false` allows commands to bypass access-group allowlists/policies.
 
 ### `web` (WhatsApp web provider)
