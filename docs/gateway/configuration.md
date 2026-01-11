@@ -634,6 +634,7 @@ Notes:
 - `commands.restart: true` enables `/restart` and the gateway tool restart action.
 - `commands.bash: true` enables `/bash` (runs host shell commands). Requires `tools.elevated.enabled` and allowlisting the sender in `tools.elevated.allowFrom.<provider>`.
 - `commands.bashForegroundMs` controls how long `/bash` waits before backgrounding. While a `/bash` job is running, new `/bash <cmd>` requests are rejected (one at a time).
+- `/bash poll` and `/bash stop` work without a session id (the Gateway only runs one `/bash` job at a time); the id is optional for explicitness.
 - `commands.useAccessGroups: false` allows commands to bypass access-group allowlists/policies.
 
 ### `web` (WhatsApp web provider)

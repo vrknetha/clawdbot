@@ -55,8 +55,8 @@ Text + native (when enabled):
 - `/stop`
 - `/restart`
 - `/bash <command>` (host-only; one at a time; use `/bash poll` + `/bash stop` for long-running jobs)
-- `/bash poll [sessionId]` (check output / status)
-- `/bash stop [sessionId]` (stop the running /bash job)
+- `/bash poll` (check output / status; accepts optional `sessionId`)
+- `/bash stop` (stop the running /bash job; accepts optional `sessionId`)
 - `/activation mention|always` (groups only)
 - `/send on|off|inherit` (owner-only)
 - `/reset` or `/new`
