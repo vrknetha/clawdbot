@@ -139,8 +139,10 @@ function buildUsageReply(): ReplyPayload {
     text: [
       "⚙️ Usage:",
       "- /bash <command>",
-      "- /bash poll [sessionId]",
-      "- /bash stop [sessionId]",
+      "- /bash poll",
+      "- /bash stop",
+      "- /bash poll <sessionId> (optional)",
+      "- /bash stop <sessionId> (optional)",
     ].join("\n"),
   };
 }
