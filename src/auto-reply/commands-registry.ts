@@ -176,6 +176,13 @@ export const CHAT_COMMANDS: ChatCommandDefinition[] = (() => {
       textAlias: "/restart",
     }),
     defineChatCommand({
+      key: "bash",
+      nativeName: "bash",
+      description: "Run a host shell command.",
+      textAlias: "/bash",
+      acceptsArgs: true,
+    }),
+    defineChatCommand({
       key: "activation",
       nativeName: "activation",
       description: "Set group activation mode.",
@@ -303,6 +310,7 @@ export function isCommandEnabled(
 ): boolean {
   if (commandKey === "config") return cfg.commands?.config === true;
   if (commandKey === "debug") return cfg.commands?.debug === true;
+  if (commandKey === "bash") return cfg.commands?.bash === true;
   return true;
 }
 

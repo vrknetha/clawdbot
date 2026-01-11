@@ -83,6 +83,7 @@ import type {
 } from "../thinking.js";
 import type { ReplyPayload } from "../types.js";
 import { isAbortTrigger, setAbortMemory } from "./abort.js";
+import { handleBashChatCommand } from "./bash-command.js";
 import { parseConfigCommand } from "./config-commands.js";
 import { parseDebugCommand } from "./debug-commands.js";
 import type { InlineDirectives } from "./directive-handling.js";
@@ -592,6 +593,27 @@ export async function handleCommands(params: {
         text: `⚙️ Restarting clawdbot via ${restartMethod.method}; give me a few seconds to come back online.`,
       },
     };
+  }
+
+  const bashRequested =
+    command.commandBodyNormalized === "/bash" ||
+    command.commandBodyNormalized.startsWith("/bash ");
+  if (allowTextCommands && bashRequested) {
+    if (!command.isAuthorizedSender) {
+      logVerbose(
+        `Ignoring /bash from unauthorized sender: ${command.senderE164 || "<unknown>"}`,
+      );
+      return { shouldContinue: false };
+    }
+    const reply = await handleBashChatCommand({
+      ctx,
+      cfg,
+      agentId: params.agentId,
+      sessionKey,
+      isGroup,
+      provider: command.provider,
+    });
+    return { shouldContinue: false, reply };
   }
 
   const helpRequested = command.commandBodyNormalized === "/help";
